@@ -114,9 +114,8 @@ void CustomTextItem::keyPressEvent(QKeyEvent *event)
         // - 1. the item is focused (probably always true though but wanna be safe)
         // - 2. the key is valid, so either an hex digit or other keys like enter or delete
         // - 3. if the key is a hex digit (0-9 A-F), make sure we won't exceed a length of 2
-        if (!this->hasFocus() || !this->IsKeyValid(key) || (this->IsKeyHex(key) && (cursorPos + 1) < 2 && (textLength + 1) > 2))
+        if (!this->hasFocus() || !this->IsKeyValid(key) || (this->IsKeyHex(key) && !this->IsTextSelected() && (cursorPos + 1) > 2 && (textLength + 1) > 2))
         {
-            this->IsEditing = false;
             event->ignore();
             return;
         }
@@ -882,6 +881,14 @@ void MemViewDialog::onSwitchFocus(FocusDirection eDirection, FocusAction eAction
         if (scrollValue >= this->ARM9AddrStart && scrollValue <= this->ARM9AddrEnd)
         {
             this->ScrollBar->setValue(scrollValue);
+
+            // the focus item doesn't change when scrolling up or down with the arrows
+            if (eDirection == focusDirection_Up || eDirection == focusDirection_Down) {
+                uint32_t address = ALIGN16(scrollValue) + addrIndex * 16 + index;
+                QString newAddr;
+                newAddr.setNum(address, 16);
+                this->AddrLabel->setText(newAddr.toUpper().rightJustified(8, '0').prepend("0x"));
+            }
 
             // UpdateText requires to check for hasFocus to prevent deselecting the text
             // so we need to force an update to make sure what we focus has the right value
