@@ -1361,7 +1361,6 @@ void MainWindow::updateCartInserted(bool gba)
             win->actROMInfo->setEnabled(inserted);
             win->actRAMInfo->setEnabled(inserted);
             win->actMemView->setEnabled(inserted);
-            this->onMemView(); // convenience for dev, remove for release!
         });
     }
 }
