@@ -36,6 +36,7 @@ CustomTextItem::CustomTextItem(const QString &text, QGraphicsItem *parent) : QGr
     this->SetSelectionFlags();
     this->setFlag(QGraphicsItem::ItemIsSelectable, false);
     this->SetSize(QRectF(2, 6, 20, 15));
+    this->eHighlightState = hightlightState_Stop;
 }
 
 QRectF CustomTextItem::boundingRect() const
@@ -70,6 +71,50 @@ bool CustomTextItem::IsKeyValid(int key)
     }
 
     return false;
+}
+
+void CustomTextItem::setPlainText(const QString &text, bool highlight)
+{
+    if (highlight)
+    {
+        this->PrevValue = this->toPlainText();
+    } else {
+        this->PrevValue = text;
+    }
+
+    this->QGraphicsTextItem::setPlainText(text);
+
+    if (this->HasValueChanged())
+    {
+        this->eHighlightState = hightlightState_Init;
+    }
+}
+
+void CustomTextItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget)
+{
+    switch (this->eHighlightState)
+    {
+        case hightlightState_Init:
+            this->Alpha = 200;
+            this->eHighlightState = hightlightState_Draw;
+            // fallthrough
+        case hightlightState_Draw:
+            if (this->Alpha > 0)
+            {
+                painter->setPen(Qt::NoPen);
+                painter->setBrush(QBrush(QColor(255, 0, 0, this->Alpha)));
+                painter->drawRect(this->boundingRect());
+                this->Alpha -= 5;
+                break;
+            }
+
+            this->eHighlightState = hightlightState_Stop;
+            break;
+        default:
+            break;
+    }
+
+    this->QGraphicsTextItem::paint(painter, option, widget);
 }
 
 void CustomTextItem::mousePressEvent(QGraphicsSceneMouseEvent *event)
@@ -111,7 +156,8 @@ void CustomTextItem::keyPressEvent(QKeyEvent *event)
 
         if (this->IsKeyHex(key) && cursorPos != 2) {
             text.remove(cursorPos, 2 - cursorPos);
-            this->setPlainText(text);
+            this->setPlainText(text, false);
+            this->eHighlightState = hightlightState_Init;
             this->setTextCursor(cursor);
         }
 
@@ -233,7 +279,7 @@ void CustomGraphicsScene::onFocusItemChanged(QGraphicsItem *newFocus, QGraphicsI
 {
     MemViewDialog* dialog = (MemViewDialog*)this->parent();
 
-    if (dialog != nullptr && newFocus != nullptr)
+    if (dialog != nullptr && newFocus != nullptr && newFocus != dialog->GetAddrLabel())
     {
         uint32_t addr = dialog->GetFocusAddress(newFocus);
 
@@ -241,13 +287,24 @@ void CustomGraphicsScene::onFocusItemChanged(QGraphicsItem *newFocus, QGraphicsI
         {
             QString text;
             text.setNum(addr, 16);
-            dialog->GetAddrLabel()->setText(text.toUpper().rightJustified(8, '0').prepend("0x"));
+            dialog->GetAddrLabel()->setPlainText(text.toUpper().rightJustified(8, '0').prepend("0x"));
 
             if (dialog->GetFocusCheckbox()->isChecked())
             {
                 dialog->GetValueAddrLineEdit()->setText(text.toUpper().rightJustified(8, '0').prepend("0x"));
             }
         }
+    }
+}
+
+void CustomLineEdit::keyPressEvent(QKeyEvent *event)
+{
+    MemViewDialog* dialog = (MemViewDialog*)this->parent();
+    this->QLineEdit::keyPressEvent(event);
+
+    if (event->key() == Qt::Key_Enter)
+    {
+        dialog->GoToAddress(this->text());
     }
 }
 
@@ -261,6 +318,8 @@ MemViewDialog::MemViewDialog(QWidget* parent) : QDialog(parent)
     this->setWindowTitle("Memory Viewer - melonDS");
     setAttribute(Qt::WA_DeleteOnClose);
 
+    this->Highlight = false;
+
     QColor placeholderColor = QColor(160, 160, 160);
 
     // create the widgets, maybe not necessary to keep a reference to everything but whatever
@@ -268,84 +327,98 @@ MemViewDialog::MemViewDialog(QWidget* parent) : QDialog(parent)
     this->GfxView = new QGraphicsView(this);
     this->ScrollBar = new QScrollBar(this);
     this->UpdateThread = new MemViewThread(this);
-    this->AddrDescLabel = new QLabel(this);
-    this->AddrLabel = new QLabel(this);
+    this->GoBtn = new QPushButton(this);
     this->UpdateRateLabel = new QLabel(this);
-    this->SearchLineEdit = new QLineEdit(this);
+    this->SearchLineEdit = new CustomLineEdit(this);
     this->UpdateRate = new QSpinBox(this);
     this->MemRegionBox = new QComboBox(this); 
     this->SetValGroup = new QGroupBox(this); 
     this->SetValFocus = new QCheckBox(this->SetValGroup);
+    this->SetValIsHex = new QCheckBox(this->SetValGroup);
     this->SetValBits = new QComboBox(this->SetValGroup);
     this->SetValBtn = new QPushButton(this->SetValGroup);
     this->SetValNumber = new QLineEdit(this->SetValGroup);
     this->SetValAddr = new QLineEdit(this->SetValGroup);
 
-    this->AddrDescLabel->setText("Address:");
-    this->AddrDescLabel->setGeometry(10, 20, 58, 18);
-
-    this->AddrLabel->setText("0x02000000");
-    this->AddrLabel->setGeometry(74, 20, 81, 18);
-    this->AddrLabel->setTextInteractionFlags(Qt::TextInteractionFlag::TextEditorInteraction);
+    this->GoBtn->setText("Go");
+    this->GoBtn->setGeometry(102, 19, 50, 34);
+    this->GoBtn->setObjectName("pushbutton_go");
 
     this->SearchLineEdit->setMaxLength(10);
     this->SearchLineEdit->setPlaceholderText("Search...");
-    this->SearchLineEdit->setGeometry(8, 40, 144, 32);
+    this->SearchLineEdit->setGeometry(8, 20, 91, 32);
     QPalette paletteSearch = this->SearchLineEdit->palette();
     paletteSearch.setColor(QPalette::ColorRole::PlaceholderText, placeholderColor);
     this->SearchLineEdit->setPalette(paletteSearch);
+    this->SearchLineEdit->setObjectName("lineedit_search");
 
     this->SetValFocus->setText("Address on focus");
-    this->SetValFocus->setGeometry(4, 106, 131, 22);
+    this->SetValFocus->setGeometry(4, 126, 131, 22);
+    this->SetValFocus->setObjectName("checkbox_setval_addr_focus");
+
+    this->SetValIsHex->setText("Hex Value");
+    this->SetValIsHex->setGeometry(4, 106, 131, 22);
+    this->SetValIsHex->setChecked(true);
+    this->SetValIsHex->setObjectName("checkbox_setval_ishex");
 
     this->UpdateRateLabel->setText("Update:");
     this->UpdateRateLabel->setGeometry(7, 264, 58, 18);
+    this->UpdateRateLabel->setObjectName("label_update_rate");
 
-    this->UpdateRate->setGeometry(61, 257, 91, 32);
+    this->UpdateRate->setGeometry(61, 257, 90, 32);
     this->UpdateRate->setMinimum(5); // below 5 ms it's causing slowdowns
     this->UpdateRate->setMaximum(10000);
     this->UpdateRate->setValue(20);
     this->UpdateRate->setSuffix(" ms");
+    this->UpdateRate->setObjectName("spinbox_update_rate");
 
     this->GfxView->setScene(this->GfxScene);
     this->GfxView->setGeometry(160, 10, 550, 280);
     this->GfxView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     this->GfxView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    this->GfxView->setObjectName("gfxview");
 
     this->GfxScene->clear();
     QRect rect = this->GfxView->contentsRect();
     this->GfxScene->setSceneRect(0, 0, rect.width(), rect.height());
     this->GfxScene->SetScrollBar(this->ScrollBar);
+    this->GfxScene->setObjectName("gfxscene");
 
     this->ScrollBar->setGeometry(710, 10, 16, 280);
     this->ScrollBar->setSingleStep(16);
     this->ScrollBar->setPageStep(16);
     this->ScrollBar->setOrientation(Qt::Orientation::Vertical);
+    this->ScrollBar->setObjectName("scrollbar");
 
-    this->SetValGroup->setGeometry(8, 80, 143, 131);
+    this->SetValGroup->setGeometry(8, 60, 143, 151);
+    this->SetValGroup->setObjectName("groupbox_setval");
 
     this->SetValBits->addItem("8 bits");
     this->SetValBits->addItem("16 bits");
     this->SetValBits->addItem("32 bits");
     this->SetValBits->setCurrentIndex(0);
     this->SetValBits->setGeometry(6, 75, 68, 30);
+    this->SetValBits->setObjectName("combobox_setval_bits");
 
     this->SetValBtn->setText("Set");
     this->SetValBtn->setGeometry(this->SetValBits->width() + 5, 75, 65, 30);
+    this->SetValBtn->setObjectName("pushbutton_setval_set_btn");
 
     this->SetValNumber->setGeometry(7, 7, 129, 30);
     this->SetValNumber->setPlaceholderText("Value");
     QPalette paletteNum = this->SetValNumber->palette();
     paletteNum.setColor(QPalette::ColorRole::PlaceholderText, placeholderColor);
     this->SetValNumber->setPalette(paletteNum);
+    this->SetValNumber->setObjectName("lineedit_setval_value");
 
     this->SetValAddr->setGeometry(7, 40, 129, 30);
     this->SetValAddr->setPlaceholderText("Address");
     QPalette paletteAddr = this->SetValAddr->palette();
     paletteAddr.setColor(QPalette::ColorRole::PlaceholderText, placeholderColor);
     this->SetValAddr->setPalette(paletteAddr);
+    this->SetValAddr->setObjectName("lineedit_setval_addr");
 
-    this->MemRegionBox->setGeometry(7, 218, 144, 32);
+    this->MemRegionBox->setGeometry(7, 218, 145, 32);
     this->MemRegionBox->addItem("Default");
     this->MemRegionBox->addItem("ITCM");
     this->MemRegionBox->addItem("Main");
@@ -354,11 +427,22 @@ MemViewDialog::MemViewDialog(QWidget* parent) : QDialog(parent)
     this->MemRegionBox->addItem("Palettes");
     this->MemRegionBox->addItem("OAM");
     this->MemRegionBox->addItem("ARM9-BIOS");
+    this->MemRegionBox->setObjectName("combobox_mem_region");
 
     // initialize the scene
     QString text;
+    QString objName;
     QColor color;
     QFont font("Monospace", 10, -1, false);
+
+    // create current address label
+    this->AddrLabel = new QGraphicsTextItem("0x02000000");
+    this->AddrLabel->setParent(this->GfxScene);
+    this->AddrLabel->setFont(font);
+    this->AddrLabel->setPos(0, 0);
+    this->AddrLabel->setTextInteractionFlags(Qt::TextInteractionFlag::TextSelectableByMouse);
+    this->AddrLabel->setObjectName("item_cur_pos_addr");
+    this->GfxScene->addItem(this->AddrLabel);
 
     // create hex digits texts
     for (int i = 0; i < 16; i++)
@@ -373,6 +457,9 @@ MemViewDialog::MemViewDialog(QWidget* parent) : QDialog(parent)
         // account for addresses column length
         x += textItem->font().pointSize() * 8;
 
+        objName = "item_hex_digit_col_";
+        objName.append(text);
+        textItem->setObjectName(objName);
         textItem->setPos(x + 10, y);
         this->GfxScene->addItem(textItem);
 
@@ -382,6 +469,9 @@ MemViewDialog::MemViewDialog(QWidget* parent) : QDialog(parent)
         {
             color = textItem->defaultTextColor();
         }
+
+        text.clear();
+        objName.clear();
     }
 
     // create addresses texts
@@ -390,18 +480,29 @@ MemViewDialog::MemViewDialog(QWidget* parent) : QDialog(parent)
         text.setNum(i * 16 + this->ARM9AddrStart, 16);
 
         QGraphicsTextItem* textItem = new QGraphicsTextItem(text.toUpper().rightJustified(8, '0').prepend("0x"));
+        objName.setNum(i);
+        objName.prepend("item_addr_row_");
+        textItem->setObjectName(objName);
         textItem->setParent(this->GfxScene);
         textItem->setFont(font);
         textItem->setPos(0, i * textItem->font().pointSize() * 1.5f + textItem->font().pointSize() + 15);
         this->GfxScene->addItem(textItem);
         this->LeftAddrItems[i] = textItem;
+        text.clear();
+        objName.clear();
     }
 
     // init memory view
     for (int i = 0; i < 16; i++)
     {
+        QString iStr;
+        iStr.setNum(i);
+
         for (int j = 0; j < 16; j++)
         {
+            QString jStr;
+            jStr.setNum(j);
+
             CustomTextItem* textItem = new CustomTextItem("00");
             connect(textItem, &CustomTextItem::applyEditToRAM, this, &MemViewDialog::onApplyEditToRAM);
             connect(textItem, &CustomTextItem::switchFocus, this, &MemViewDialog::onSwitchFocus);
@@ -413,8 +514,14 @@ MemViewDialog::MemViewDialog(QWidget* parent) : QDialog(parent)
             // account for addresses column length
             x += textItem->font().pointSize() * 8;
             textItem->setPos(x + 10, i * textItem->font().pointSize() * 1.5f + textItem->font().pointSize() + 15);
+            objName = "item_val_";
+            objName.append(iStr);
+            objName.append("_");
+            objName.append(jStr);
+            textItem->setObjectName(objName);
             this->GfxScene->addItem(textItem);
             this->RAMTextItems[i][j] = textItem;
+            objName.clear();
         }
     }
 
@@ -423,6 +530,7 @@ MemViewDialog::MemViewDialog(QWidget* parent) : QDialog(parent)
     textItem->setParent(this->GfxScene);
     textItem->setFont(font);
     textItem->setPos(416, 0);
+    textItem->setObjectName("item_decoded_header");
     this->GfxScene->addItem(textItem);
 
     // init ascii view
@@ -432,6 +540,9 @@ MemViewDialog::MemViewDialog(QWidget* parent) : QDialog(parent)
         textItem->setParent(this->GfxScene);
         textItem->setFont(font);
         textItem->setPos(416, i * textItem->font().pointSize() * 1.5f + textItem->font().pointSize() + 15);
+        objName.setNum(i);
+        objName.prepend("item_decoded_row_");
+        textItem->setObjectName(objName);
         this->GfxScene->addItem(textItem);
         this->AsciiStrings[i] = textItem;
     }
@@ -450,15 +561,13 @@ MemViewDialog::MemViewDialog(QWidget* parent) : QDialog(parent)
         this->UpdateViewRegion(0x02000000, 0x03000000);
     }
 
-    this->UpdateThread->Start();
-    connect(this->UpdateThread, &MemViewThread::updateTextSignal, this, &MemViewDialog::UpdateText);
-    connect(this->UpdateThread, &MemViewThread::updateAddressSignal, this, &MemViewDialog::UpdateAddress);
-    connect(this->UpdateThread, &MemViewThread::updateDecodedSignal, this, &MemViewDialog::UpdateDecoded);
-    connect(this->SearchLineEdit, &QLineEdit::textChanged, this, &MemViewDialog::onAddressTextChanged);
+    connect(this->UpdateThread, &MemViewThread::updateSceneSignal, this, &MemViewDialog::onUpdateSceneSignal);
+    connect(this->GoBtn, &QPushButton::pressed, this, &MemViewDialog::onGoBtnPressed);
     connect(this->SetValBtn, &QPushButton::pressed, this, &MemViewDialog::onValueBtnSetPressed);
     connect(this->GfxScene, &QGraphicsScene::focusItemChanged, this->GfxScene, &CustomGraphicsScene::onFocusItemChanged);
     connect(this->ScrollBar, &QScrollBar::valueChanged, this, &MemViewDialog::onScrollBarValueChanged);
     connect(this->MemRegionBox, &QComboBox::currentIndexChanged, this, &MemViewDialog::onMemRegionIndexChanged);
+    this->UpdateThread->Start();
 
     qRegisterMetaType<QVector<int>>("QVector<int>");
     qRegisterMetaType<u32>("u32");
@@ -628,6 +737,25 @@ void MemViewDialog::SwitchMemRegion(uint32_t address) {
     this->onMemRegionIndexChanged(index);
 }
 
+void MemViewDialog::UpdateScene()
+{
+    this->UpdateThread->Pause();
+
+    for (int i = 0; i < 16; i++)
+    {
+        this->UpdateAddress(i);
+
+        for (int j = 0; j < 16; j++)
+        {
+            this->UpdateText(i, j);
+        }
+
+        this->UpdateDecoded(i);
+    }
+
+    this->UpdateThread->Unpause();
+}
+
 void MemViewDialog::done(int r)
 {
     QDialog::done(r);
@@ -658,7 +786,7 @@ void MemViewDialog::UpdateText(int addrIndex, int index)
         if (!item->hasFocus() || this->ForceTextUpdate)
         {
             text.setNum(byte, 16);
-            item->setPlainText(text.toUpper().rightJustified(2, '0'));
+            item->setPlainText(text.toUpper().rightJustified(2, '0'), this->Highlight);
         }
 
         if (index == 0)
@@ -710,7 +838,7 @@ void MemViewDialog::UpdateDecoded(int index)
     }
 }
 
-void MemViewDialog::onAddressTextChanged(const QString &text)
+void MemViewDialog::GoToAddress(const QString &text)
 {
     QString rawAddr = text;
     uint32_t addr = 0;
@@ -748,7 +876,14 @@ void MemViewDialog::onAddressTextChanged(const QString &text)
 
     QString val;
     val.setNum(addr, 16);
-    this->AddrLabel->setText(val.toUpper().rightJustified(8, '0').prepend("0x"));
+    this->AddrLabel->setPlainText(val.toUpper().rightJustified(8, '0').prepend("0x"));
+
+    CustomTextItem* item = (CustomTextItem*)this->GetItem(0, addr - alignedAddr);
+    if (item != nullptr)
+    {
+        this->GfxScene->clearFocus();
+        this->GfxScene->setFocusItem(item);
+    }
 }
 
 void MemViewDialog::onValueBtnSetPressed()
@@ -768,19 +903,21 @@ void MemViewDialog::onValueBtnSetPressed()
     this->StripStringHex(&text);
 
     void* pRAM = this->GetRAM(address);
+    bool isHex = this->SetValIsHex->isChecked() || this->SetValNumber->text().startsWith("0x");
+    int base = isHex == true ? 16 : 10;
 
     if (pRAM != nullptr)
     {
         switch (this->SetValBits->currentIndex())
         {
             case 0: // 8 bits
-                *((uint8_t*)pRAM) = text.toUInt(0, 16);
+                *((uint8_t*)pRAM) = text.toUInt(0, base);
                 break;
             case 1: // 16 bits
-                *((uint16_t*)pRAM) = text.toUInt(0, 16);
+                *((uint16_t*)pRAM) = text.toUInt(0, base);
                 break;
             case 2: // 32 bits
-                *((uint32_t*)pRAM) = text.toUInt(0, 16);
+                *((uint32_t*)pRAM) = text.toUInt(0, base);
                 break;
             default:
                 return;
@@ -894,13 +1031,8 @@ void MemViewDialog::onSwitchFocus(FocusDirection eDirection, FocusAction eAction
                 uint32_t address = ALIGN16(scrollValue) + addrIndex * 16 + index;
                 QString newAddr;
                 newAddr.setNum(address, 16);
-                this->AddrLabel->setText(newAddr.toUpper().rightJustified(8, '0').prepend("0x"));
+                this->AddrLabel->setPlainText(newAddr.toUpper().rightJustified(8, '0').prepend("0x"));
             }
-
-            // UpdateText requires to check for hasFocus to prevent deselecting the text
-            // so we need to force an update to make sure what we focus has the right value
-            this->ForceTextUpdate = true;
-            this->UpdateText(addrIndex, index);
 
             switch (eAction) {
                 case focusAction_SetSelectionMode:
@@ -922,6 +1054,8 @@ void MemViewDialog::onSwitchFocus(FocusDirection eDirection, FocusAction eAction
             }
         }
     }
+
+    this->UpdateScene();
 }
 
 void MemViewDialog::onScrollBarValueChanged(int value) {
@@ -934,6 +1068,8 @@ void MemViewDialog::onScrollBarValueChanged(int value) {
         this->UpdateText(packed >> 8, packed & 0xFF);
         item->SetTextSelection(true);
     }
+
+    this->UpdateScene();
 }
 
 void MemViewDialog::onMemRegionIndexChanged(int index) {
@@ -984,6 +1120,18 @@ void MemViewDialog::onMemRegionIndexChanged(int index) {
     }
 }
 
+void MemViewDialog::onGoBtnPressed()
+{
+    this->GoToAddress(this->SearchLineEdit->text());
+}
+
+void MemViewDialog::onUpdateSceneSignal()
+{
+    this->Highlight = true;
+    this->UpdateScene();
+    this->Highlight = false;
+}
+
 // --- MemViewThread ---
 
 MemViewThread::~MemViewThread()
@@ -1009,9 +1157,14 @@ void MemViewThread::run()
 {
     while (this->Running)
     {
-        if (!this->Dialog || !this->Dialog->UpdateRate)
+        if (this->Dialog == nullptr || this->Dialog->UpdateRate == nullptr)
         {
             return;
+        }
+
+        if (this->IsPaused)
+        {
+            continue;
         }
 
         int time = this->Dialog->UpdateRate->value();
@@ -1021,16 +1174,6 @@ void MemViewThread::run()
 
         QThread::msleep(time);
 
-        for (int i = 0; i < 16; i++)
-        {
-            emit updateAddressSignal(i);
-
-            for (int j = 0; j < 16; j++)
-            {
-                emit updateTextSignal(i, j);
-            }
-
-            emit updateDecodedSignal(i);
-        }
+        emit updateSceneSignal();
     }
 }
