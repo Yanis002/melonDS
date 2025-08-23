@@ -1063,7 +1063,7 @@ void ARM::ResetGdb()
     NDS.Reset();
     NDS.GPU.StartFrame(); // need this to properly kick off the scheduler & frame output
 }
-int ARM::RemoteCmd(const u8* cmd, size_t len)
+int ARM::RemoteCmd(const u8* cmd, size_t len, u8* resp, size_t resp_len)
 {
     (void)len;
 
@@ -1071,6 +1071,14 @@ int ARM::RemoteCmd(const u8* cmd, size_t len)
     if (!strcmp((const char*)cmd, "reset") || !strcmp((const char*)cmd, "r"))
     {
         Reset();
+        return 0;
+    }
+    if (!strcmp((const char*)cmd, "gamecode"))
+    {
+        if (resp_len < 4) return 2;
+        auto cart = NDS.GetNDSCart();
+        if (!cart) return 3;
+        memcpy(resp, cart->GetHeader().GameCode, 4);
         return 0;
     }
 

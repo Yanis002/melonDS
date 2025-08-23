@@ -49,7 +49,7 @@ public:
 	{
 		printf("[==>] RESET!!!\n");
 	}
-	int RemoteCmd(const u8* cmd, size_t len) override
+	int RemoteCmd(const u8* cmd, size_t len, u8* resp, size_t resp_len) override
 	{
 		printf("[==>] Rcmd: %s\n", cmd);
 		return 0;

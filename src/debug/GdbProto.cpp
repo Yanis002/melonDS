@@ -194,12 +194,8 @@ ReadResult GdbStub::MsgRecv()
 
 		if (receivedNum <= 0)
 		{
-			if (first) return ReadResult::NoPacket;
-			else
-			{
-				Log(LogLevel::Debug, "[GDB] recv() error %zi, errno=%d (%s)\n", receivedNum, errno, strerror(errno));
-				return ReadResult::Eof;
-			}
+			Log(LogLevel::Debug, "[GDB] recv() error %zi, errno=%d (%s)\n", receivedNum, errno, strerror(errno));
+			return ReadResult::Eof;
 		}
 		RecvBufferFilled += static_cast<u32>(receivedNum); 
 
