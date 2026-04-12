@@ -44,6 +44,10 @@ set(SOURCES_QT_SDL
     AboutDialog.ui
     ARCodeQDecl.h
     MemViewDialog.cpp
+    MemWatchDialog.cpp
+    MemScanDialog.cpp
+    MemWatchActorDialog.cpp
+    MemWatchActor.cpp
 
     ArchiveUtil.h
     ArchiveUtil.cpp

@@ -93,6 +93,11 @@ public:
         this->Size = newSize;
     }
 
+    void SetWidth(qreal width)
+    {
+        this->Size.setWidth(width);
+    }
+
     void SetEditionFlags()
     {
         this->IsEditing = true;
@@ -328,6 +333,7 @@ private:
     void UpdateAddress(int index);
     void UpdateDecoded(int index);
     void UpdateScene();
+    void UpdateHeaderOffsets();
 
 private slots:
     void done(int r);
@@ -339,12 +345,14 @@ private slots:
     void onGoBtnPressed();
     void onUpdateSceneSignal();
     void onDumpBtnPressed();
+    void onByteGroupingChanged(int index);
 
 public:
     uint32_t ARM9AddrStart;
     uint32_t ARM9AddrEnd;
     bool ForceTextUpdate;
     bool Highlight;
+    int ByteGrouping;
 
 private:
     QGraphicsView* GfxView;
@@ -358,6 +366,8 @@ private:
     QSpinBox* UpdateRate;
     QComboBox* MemRegionBox;
     QPushButton* DumpBtn;
+    QLabel* ByteGroupingLabel;
+    QComboBox* ByteGroupingBox;
 
     // value setter group
     QGroupBox* SetValGroup;
@@ -371,6 +381,7 @@ private:
     // yes I could just use `items()` but good ol' arrays are easier to work with
     CustomTextItem* RAMTextItems[16][16];
     QGraphicsTextItem* LeftAddrItems[16];
+    QGraphicsTextItem* TopOffsetItems[16];
     QGraphicsTextItem* AsciiStrings[16];
     QString DecodedStrings[16];
 

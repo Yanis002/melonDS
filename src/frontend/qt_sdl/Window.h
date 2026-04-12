@@ -136,6 +136,9 @@ private slots:
     void onNPStartClient();
     void onNPTest();
     void onMemView();
+    void onMemWatch();
+    void onMemScan();
+    void onMemWatchActor();
 
     void onOpenEmuSettings();
     void onEmuSettingsDialogFinished(int res);
@@ -261,6 +264,9 @@ public:
     QAction* actNPStartClient;
     QAction* actNPTest;
     QAction* actMemView;
+    QAction* actMemWatch;
+    QAction* actMemScan;
+    QAction* actMemWatchActor;
 
     QAction* actEmuSettings;
 #ifdef __APPLE__

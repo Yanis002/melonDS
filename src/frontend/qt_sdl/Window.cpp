@@ -65,6 +65,10 @@
 #include "ROMInfoDialog.h"
 #include "RAMInfoDialog.h"
 #include "MemViewDialog.h"
+#include "MemWatchDialog.h"
+#include "MemScanDialog.h"
+#include "MemWatchActor.h"
+#include "MemWatchActorDialog.h"
 #include "TitleManagerDialog.h"
 #include "PowerManagement/PowerManagementDialog.h"
 
@@ -446,9 +450,6 @@ MainWindow::MainWindow(int id, EmuInstance* inst, QWidget* parent) :
 
                 actTitleManager = menu->addAction("Manage DSi titles");
                 connect(actTitleManager, &QAction::triggered, this, &MainWindow::onOpenTitleManager);
-
-                actMemView = menu->addAction("Memory Viewer");
-                connect(actMemView, &QAction::triggered, this, &MainWindow::onMemView);
             }
 
             {
@@ -616,6 +617,21 @@ MainWindow::MainWindow(int id, EmuInstance* inst, QWidget* parent) :
             actShowOSD = menu->addAction("Show OSD");
             actShowOSD->setCheckable(true);
             connect(actShowOSD, &QAction::triggered, this, &MainWindow::onChangeShowOSD);
+        }
+        {
+            QMenu * menu = menubar->addMenu("Tools");
+
+            actMemView = menu->addAction("Memory Viewer");
+            connect(actMemView, &QAction::triggered, this, &MainWindow::onMemView);
+
+            actMemWatch = menu->addAction("Memory Watches");
+            connect(actMemWatch, &QAction::triggered, this, &MainWindow::onMemWatch);
+            
+            actMemScan = menu->addAction("Memory Scanner");
+            connect(actMemScan, &QAction::triggered, this, &MainWindow::onMemScan);
+
+            actMemWatchActor = menu->addAction("Actor Memory Watches");
+            connect(actMemWatchActor, &QAction::triggered, this, &MainWindow::onMemWatchActor);
         }
         {
             QMenu * menu = menubar->addMenu("Config");
@@ -1346,7 +1362,9 @@ void MainWindow::updateCartInserted(bool gba)
             win->actROMInfo->setEnabled(inserted);
             win->actRAMInfo->setEnabled(inserted);
             win->actMemView->setEnabled(inserted);
-            this->onMemView(); // convenience for dev, remove for release!
+            win->actMemWatch->setEnabled(inserted);
+            win->actMemScan->setEnabled(inserted);
+            win->actMemWatchActor->setEnabled(inserted);
         });
     }
 }
@@ -1773,6 +1791,18 @@ void MainWindow::onRAMInfo()
 
 void MainWindow::onMemView() {
     MemViewDialog* dlg = MemViewDialog::openDlg(this);
+}
+
+void MainWindow::onMemWatch() {
+    MemWatchDialog* dlg = MemWatchDialog::openDlg(this);
+}
+
+void MainWindow::onMemScan() {
+    MemScanDialog* dlg = MemScanDialog::openDlg(this);
+}
+
+void MainWindow::onMemWatchActor() {
+    MemWatchActorDialog* dlg = MemWatchActorDialog::openDlg(this);
 }
 
 void MainWindow::onOpenTitleManager()
