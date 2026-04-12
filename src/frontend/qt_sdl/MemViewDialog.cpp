@@ -322,6 +322,7 @@ MemViewDialog::MemViewDialog(QWidget* parent) : QDialog(parent)
     setAttribute(Qt::WA_DeleteOnClose);
 
     this->Highlight = false;
+    this->ByteGrouping = 1;
 
     QColor placeholderColor = QColor(160, 160, 160);
 
@@ -335,6 +336,8 @@ MemViewDialog::MemViewDialog(QWidget* parent) : QDialog(parent)
     this->SearchLineEdit = new CustomLineEdit(this);
     this->UpdateRate = new QSpinBox(this);
     this->MemRegionBox = new QComboBox(this); 
+    this->ByteGroupingLabel = new QLabel(this);
+    this->ByteGroupingBox = new QComboBox(this);
     this->SetValGroup = new QGroupBox(this); 
     this->SetValFocus = new QCheckBox(this->SetValGroup);
     this->SetValIsHex = new QCheckBox(this->SetValGroup);
@@ -437,6 +440,17 @@ MemViewDialog::MemViewDialog(QWidget* parent) : QDialog(parent)
     this->MemRegionBox->addItem("ARM9-BIOS");
     this->MemRegionBox->setObjectName("combobox_mem_region");
 
+    this->ByteGroupingLabel->setText("Grouping:");
+    this->ByteGroupingLabel->setGeometry(7, 295, 60, 18);
+    this->ByteGroupingLabel->setObjectName("label_byte_grouping");
+
+    this->ByteGroupingBox->setGeometry(65, 288, 87, 32);
+    this->ByteGroupingBox->addItem("Bytes");
+    this->ByteGroupingBox->addItem("Halfwords");
+    this->ByteGroupingBox->addItem("Words");
+    this->ByteGroupingBox->setCurrentIndex(0);
+    this->ByteGroupingBox->setObjectName("combobox_byte_grouping");
+
     // initialize the scene
     QString text;
     QString objName;
@@ -470,6 +484,7 @@ MemViewDialog::MemViewDialog(QWidget* parent) : QDialog(parent)
         textItem->setObjectName(objName);
         textItem->setPos(x + 10, y);
         this->GfxScene->addItem(textItem);
+        this->TopOffsetItems[i] = textItem;
 
         // kinda hacky but we need to sync the line's color on the text
         // and since the text color depends on the system's theme... easy way for now...
@@ -576,6 +591,7 @@ MemViewDialog::MemViewDialog(QWidget* parent) : QDialog(parent)
     connect(this->ScrollBar, &QScrollBar::valueChanged, this, &MemViewDialog::onScrollBarValueChanged);
     connect(this->MemRegionBox, &QComboBox::currentIndexChanged, this, &MemViewDialog::onMemRegionIndexChanged);
     connect(this->DumpBtn, &QPushButton::pressed, this, &MemViewDialog::onDumpBtnPressed);
+    connect(this->ByteGroupingBox, &QComboBox::currentIndexChanged, this, &MemViewDialog::onByteGroupingChanged);
     this->UpdateThread->Start();
 
     qRegisterMetaType<QVector<int>>("QVector<int>");
@@ -788,14 +804,67 @@ void MemViewDialog::UpdateText(int addrIndex, int index)
 
     if (item != nullptr)
     {
-        // if pRAM is null (can happen for Shared WRAM if unused), fill with 0x69 to make it obvious
-        uint8_t byte = pRAM != nullptr ? *pRAM : 0x69;
-
         // only update the text when the item isn't focused so we can edit it
         if (!item->hasFocus() || this->ForceTextUpdate)
         {
-            text.setNum(byte, 16);
-            item->setPlainText(text.toUpper().rightJustified(2, '0'), this->Highlight);
+            // Handle byte grouping (1 = bytes, 2 = halfwords, 4 = words)
+            if (this->ByteGrouping == 2)
+            {
+                // Halfwords (16-bit values, little-endian)
+                // Only display on even indices
+                if (index % 2 == 0)
+                {
+                    uint8_t* pRAM2 = (uint8_t*)this->GetRAM(address + index + 1);
+                    uint8_t byte1 = pRAM != nullptr ? *pRAM : 0x69;
+                    uint8_t byte2 = pRAM2 != nullptr ? *pRAM2 : 0x69;
+                    uint16_t halfword = byte1 | (byte2 << 8);  // Little-endian
+                    text.setNum(halfword, 16);
+                    item->SetWidth(40);  // Width for 4 hex chars
+                    item->setPlainText(text.toUpper().rightJustified(4, '0'), this->Highlight);
+                    item->setVisible(true);
+                }
+                else
+                {
+                    // Hide odd indices when grouping by halfwords
+                    item->setPlainText("", false);
+                    item->setVisible(false);
+                }
+            }
+            else if (this->ByteGrouping == 4)
+            {
+                // Words (32-bit values, little-endian)
+                // Only display on multiples of 4
+                if (index % 4 == 0)
+                {
+                    uint8_t* pRAM2 = (uint8_t*)this->GetRAM(address + index + 1);
+                    uint8_t* pRAM3 = (uint8_t*)this->GetRAM(address + index + 2);
+                    uint8_t* pRAM4 = (uint8_t*)this->GetRAM(address + index + 3);
+                    uint8_t byte1 = pRAM != nullptr ? *pRAM : 0x69;
+                    uint8_t byte2 = pRAM2 != nullptr ? *pRAM2 : 0x69;
+                    uint8_t byte3 = pRAM3 != nullptr ? *pRAM3 : 0x69;
+                    uint8_t byte4 = pRAM4 != nullptr ? *pRAM4 : 0x69;
+                    uint32_t word = byte1 | (byte2 << 8) | (byte3 << 16) | (byte4 << 24);  // Little-endian
+                    text.setNum(word, 16);
+                    item->SetWidth(80);  // Width for 8 hex chars
+                    item->setPlainText(text.toUpper().rightJustified(8, '0'), this->Highlight);
+                    item->setVisible(true);
+                }
+                else
+                {
+                    // Hide other indices when grouping by words
+                    item->setPlainText("", false);
+                    item->setVisible(false);
+                }
+            }
+            else
+            {
+                // Default: single byte display
+                uint8_t byte = pRAM != nullptr ? *pRAM : 0x69;
+                text.setNum(byte, 16);
+                item->SetWidth(20);  // Width for 2 hex chars
+                item->setPlainText(text.toUpper().rightJustified(2, '0'), this->Highlight);
+                item->setVisible(true);
+            }
         }
 
         if (index == 0)
@@ -803,8 +872,10 @@ void MemViewDialog::UpdateText(int addrIndex, int index)
             this->DecodedStrings[addrIndex].clear();
         }
 
+        // For ASCII display, always use single bytes
         if (this->DecodedStrings[addrIndex].length() < 16)
         {
+            uint8_t byte = pRAM != nullptr ? *pRAM : 0x69;
             // decode printable characters otherwise just use a dot
             if (byte >= 0x20 && byte <= 0x7E)
             {
@@ -1201,7 +1272,7 @@ void MemViewDialog::onDumpBtnPressed()
 
             // write file and free previous alloc
             result = Platform::FileWrite(pBuffer, size, 1, file);
-            delete pBuffer;
+            delete[] pBuffer;
         }
     }
     else
@@ -1216,6 +1287,40 @@ void MemViewDialog::onDumpBtnPressed()
         Platform::Log(Platform::Error, "Failed to write ram dump to %s\n", filename.c_str());
     } else {
         Platform::Log(Platform::Info, "File saved successfully to %s!\n", filename.c_str());
+    }
+}
+
+void MemViewDialog::onByteGroupingChanged(int index)
+{
+    switch (index)
+    {
+        case 0:
+            this->ByteGrouping = 1;  // Bytes
+            break;
+        case 1:
+            this->ByteGrouping = 2;  // Halfwords
+            break;
+        case 2:
+            this->ByteGrouping = 4;  // Words
+            break;
+        default:
+            this->ByteGrouping = 1;
+            break;
+    }
+
+    this->UpdateHeaderOffsets();
+    this->UpdateScene();
+}
+
+void MemViewDialog::UpdateHeaderOffsets()
+{
+    for (int i = 0; i < 16; i++)
+    {
+        QGraphicsTextItem* item = this->TopOffsetItems[i];
+        if (item != nullptr)
+        {
+            item->setVisible(i % this->ByteGrouping == 0);
+        }
     }
 }
 
