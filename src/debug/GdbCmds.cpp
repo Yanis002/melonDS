@@ -726,10 +726,21 @@ ExecResult GdbStub::Handle_q_Rcmd(GdbStub* stub, const u8* cmd, ssize_t len)
 		tempdatabuf[i] = unhex8(&cmd[i*2]);
 	}
 
-	int r = stub->Cb->RemoteCmd(tempdatabuf, len/2);
+	u8 responsebuf[512] = {0};
+	int r = stub->Cb->RemoteCmd(tempdatabuf, len/2, responsebuf, sizeof(responsebuf));
+	size_t rlen = strlen((const char*)responsebuf);
 
 	if (r) stub->RespFmt("E%02X", r&0xff);
-	else stub->RespStr("OK");
+	else if(rlen == 0) stub->RespStr("OK");
+	else
+	{
+		// hex-encode response
+		for (size_t i = 0; i < rlen; ++i)
+		{
+			hexfmt8(&tempdatabuf[i*2], responsebuf[i]);
+		}
+		stub->Resp(tempdatabuf, rlen*2);
+	}
 
 	return ExecResult::Ok;
 }

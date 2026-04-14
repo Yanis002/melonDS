@@ -309,6 +309,10 @@ u64 FileLength(FileHandle* file)
 
 void Log(LogLevel level, const char* fmt, ...)
 {
+#ifdef NDEBUG
+    if (level <= LogLevel::Debug)
+        return;
+#endif
     if (fmt == nullptr)
         return;
 

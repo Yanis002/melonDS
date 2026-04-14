@@ -1,10 +1,11 @@
 name: Windows
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - master
-      - ci/*
+      # - ci/*
   pull_request:
     branches:
       - master

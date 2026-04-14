@@ -49,7 +49,7 @@ public:
 	virtual void WriteMem(u32 addr, int len, u32 value) = 0;
 
 	virtual void ResetGdb() = 0;
-	virtual int RemoteCmd(const u8* cmd, size_t len) = 0;
+	virtual int RemoteCmd(const u8* cmd, size_t len, u8* resp, size_t resp_len) = 0;
 };
 
 enum class StubState
