@@ -48,6 +48,8 @@ set(SOURCES_QT_SDL
     MemScanDialog.cpp
     MemWatchActorDialog.cpp
     MemWatchActor.cpp
+    MemWatchExplorerDialog.h
+    MemWatchExplorerDialog.cpp
 
     ArchiveUtil.h
     ArchiveUtil.cpp
