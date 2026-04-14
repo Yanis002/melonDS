@@ -67,8 +67,7 @@
 #include "MemViewDialog.h"
 #include "MemWatchDialog.h"
 #include "MemScanDialog.h"
-#include "MemWatchActor.h"
-#include "MemWatchActorDialog.h"
+#include "MemWatchExplorerDialog.h"
 #include "TitleManagerDialog.h"
 #include "PowerManagement/PowerManagementDialog.h"
 

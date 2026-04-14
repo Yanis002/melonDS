@@ -416,9 +416,10 @@ uint32_t MemWatchDialog::ReadValue(const WatchEntry &entry, bool *valid)
         return *(uint16_t *)pRAM;
     case watchDataType_Word:
         return *(uint32_t *)pRAM;
+    default:
+        return 0;
     }
 
-    return 0;
 }
 
 void MemWatchDialog::WriteValue(WatchEntry &entry, uint32_t value)
@@ -442,6 +443,8 @@ void MemWatchDialog::WriteValue(WatchEntry &entry, uint32_t value)
         break;
     case watchDataType_Word:
         *(uint32_t *)pRAM = value;
+        break;
+    default:
         break;
     }
 }
@@ -473,6 +476,9 @@ QString MemWatchDialog::FormatValue(uint32_t value, WatchDisplayFormat format, W
             signedValue = (int16_t)value;
             break;
         case watchDataType_Word:
+            signedValue = (int32_t)value;
+            break;
+        default:
             signedValue = (int32_t)value;
             break;
         }
@@ -632,6 +638,7 @@ void MemWatchDialog::onAddWatch()
     formatCombo->addItem("Decimal");
     formatCombo->addItem("Signed");
     formatCombo->addItem("Unsigned");
+    formatCombo->addItem("Q20.12 Float");
 
     QCheckBox *pointerCheck = new QCheckBox("This is a pointer");
 
@@ -794,6 +801,7 @@ void MemWatchDialog::onEditWatch()
     formatCombo->addItem("Decimal");
     formatCombo->addItem("Signed");
     formatCombo->addItem("Unsigned");
+    formatCombo->addItem("Q20.12 Float");
     formatCombo->setCurrentIndex((int)entry.displayFormat);
 
     QCheckBox *pointerCheck = new QCheckBox("This is a pointer");
@@ -945,15 +953,28 @@ void MemWatchDialog::onCellDoubleClicked(int row, int column)
             bool convOk;
             uint32_t value;
 
-            if (input.startsWith("0x", Qt::CaseInsensitive))
-                value = input.mid(2).toUInt(&convOk, 16);
-            else
-                value = input.toUInt(&convOk, 10);
-
-            if (convOk)
+            if (watches[row].displayFormat == watchDisplayFormat_q20Float)
             {
-                QMutexLocker locker(&watchMutex);
-                WriteValue(watches[row], value);
+                float floatVal = input.toFloat(&convOk);
+                if (convOk)
+                {
+                    value = (uint32_t)floatToQ20(floatVal);
+                    QMutexLocker locker(&watchMutex);
+                    WriteValue(watches[row], value);
+                }
+            }
+            else
+            {
+                if (input.startsWith("0x", Qt::CaseInsensitive))
+                    value = input.mid(2).toUInt(&convOk, 16);
+                else
+                    value = input.toUInt(&convOk, 10);
+
+                if (convOk)
+                {
+                    QMutexLocker locker(&watchMutex);
+                    WriteValue(watches[row], value);
+                }
             }
         }
     }

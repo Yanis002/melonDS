@@ -67,7 +67,7 @@ enum WatchDisplayFormat {
     watchDisplayFormat_Decimal = 1,
     watchDisplayFormat_Signed = 2,
     watchDisplayFormat_Unsigned = 3,
-    watchDisplayFormat_q20Float = 5,
+    watchDisplayFormat_q20Float = 4,
 };
 
 struct WatchEntry {
@@ -149,7 +149,11 @@ private:
     void UpdateRecentFilesMenu();
 
     static float q20ToFloat(int32_t q20Value) {
-        return ((q20Value * 2) - 1) / (float)(1 << 12);
+        return ((q20Value * 2) - 1) / (float)(1 << 13);
+    };
+
+    static int32_t floatToQ20(float floatValue) {
+        return (int32_t)((floatValue * (float)(1 << 13) + 1.0f) / 2.0f);
     };
 
     static QString GetDataTypeString(const WatchDataType& dataType) {
@@ -180,6 +184,8 @@ private:
             return "Signed";
         case watchDisplayFormat_Unsigned:
             return "Unsigned";
+        case watchDisplayFormat_q20Float:
+            return "Q20.12 Float";
         default:
             return "Unknown";
         }
