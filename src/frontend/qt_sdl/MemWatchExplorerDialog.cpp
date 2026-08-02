@@ -475,6 +475,10 @@ ActorData MemWatchActor::readActorData(uint32_t actorAddress)
     data.flags = 0;
     data.actorId = 0;
     data.actorIdString = "????";
+    data.params[0] = 0;
+    data.params[1] = 0;
+    data.params[2] = 0;
+    data.params[3] = 0;
 
     if (!actorAddress)
         return data;
@@ -501,6 +505,12 @@ ActorData MemWatchActor::readActorData(uint32_t actorAddress)
     if (flagsPtr)
     {
         data.flags = *(uint32_t *)flagsPtr;
+    }
+
+    void *paramsPtr = GetRAM(actorAddress + 0x5C + 0x10);
+    if (paramsPtr)
+    {
+        *(uint32_t*)data.params = *(uint32_t*)paramsPtr;
     }
 
     void *typePtr = GetRAM(actorAddress + 0x90);
@@ -624,8 +634,8 @@ void MemWatchActor::refreshList()
         float velX = q20ToFloat(actor.velX);
         float velY = q20ToFloat(actor.velY);
         float velZ = q20ToFloat(actor.velZ);
-        
-        QString displayText = QString("[%1]  Pos:(%2,%3,%4)  Vel:(%5,%6,%7)  F:0x%8")
+
+        QString displayText = QString("[%1]  Pos:(%2,%3,%4)  Vel:(%5,%6,%7)  F:0x%8  P:0x%9;0x%10;0x%11;0x%12 @ 0x%13")
             .arg(actor.actorIdString, -4)
             .arg(posX, 7, 'f', 1)
             .arg(posY, 7, 'f', 1)
@@ -633,7 +643,12 @@ void MemWatchActor::refreshList()
             .arg(velX, 7, 'f', 1)
             .arg(velY, 7, 'f', 1)
             .arg(velZ, 7, 'f', 1)
-            .arg(actor.flags, 8, 16, QChar('0'));
+            .arg(actor.flags, 8, 16, QChar('0'))
+            .arg(actor.params[0], 4, 16, QChar('0'))
+            .arg(actor.params[1], 4, 16, QChar('0'))
+            .arg(actor.params[2], 4, 16, QChar('0'))
+            .arg(actor.params[3], 4, 16, QChar('0'))
+            .arg(actor.address, 8, 16, QChar('0'));
 
         displayObject(displayText, actor.tableEntryAddress);
     }
@@ -799,6 +814,12 @@ MapObjectData MemWatchMapObject::readMapObjectData(uint32_t mapobjectAddress)
     data.flags = 0;
     data.mapObjectId = 0;
     data.mapObjectIdString = "????";
+    data.params[0] = 0;
+    data.params[1] = 0;
+    data.params[2] = 0;
+    data.params[3] = 0;
+    data.initialPos[0] = 0;
+    data.initialPos[1] = 0;
 
     if (!mapobjectAddress)
         return data;
@@ -815,7 +836,19 @@ MapObjectData MemWatchMapObject::readMapObjectData(uint32_t mapobjectAddress)
     void *flagsPtr = GetRAM(mapobjectAddress + 0x1C);
     if (flagsPtr)
     {
-        data.flags = *(uint32_t *)flagsPtr;
+        data.flags = *(unsigned short *)flagsPtr;
+    }
+
+    void *paramsPtr = GetRAM(mapobjectAddress + 0x20 + 0x00);
+    if (paramsPtr)
+    {
+        *(uint32_t*)data.params = *(uint32_t*)paramsPtr;
+    }
+
+    void *initialposPtr = GetRAM(mapobjectAddress + 0x3A);
+    if (initialposPtr)
+    {
+        *(unsigned short*)data.initialPos = *(unsigned short*)initialposPtr;
     }
 
     void *profilePtr = GetRAM(mapobjectAddress + 0x3C);
@@ -937,12 +970,19 @@ void MemWatchMapObject::refreshList()
         float posY = q20ToFloat(mapobject.posY);
         float posZ = q20ToFloat(mapobject.posZ);
         
-        QString displayText = QString("[%1]  Pos:(%2,%3,%4)  F:0x%5")
+        QString displayText = QString("[%1_0x%2_0x%3]  Pos:(%4,%5,%6)  F:0x%7  P:0x%8;0x%9;0x%10;0x%11 @ 0x%12")
             .arg(mapobject.mapObjectIdString, -4)
+            .arg(mapobject.initialPos[0], 2, 16, QChar('0'))
+            .arg(mapobject.initialPos[1], 2, 16, QChar('0'))
             .arg(posX, 7, 'f', 1)
             .arg(posY, 7, 'f', 1)
             .arg(posZ, 7, 'f', 1)
-            .arg(mapobject.flags, 8, 16, QChar('0'));
+            .arg(mapobject.flags, 4, 16, QChar('0'))
+            .arg(mapobject.params[0], 4, 16, QChar('0'))
+            .arg(mapobject.params[1], 4, 16, QChar('0'))
+            .arg(mapobject.params[2], 4, 16, QChar('0'))
+            .arg(mapobject.params[3], 4, 16, QChar('0'))
+            .arg(mapobject.address, 8, 16, QChar('0'));
 
         displayObject(displayText, mapobject.tableEntryAddress);
     }

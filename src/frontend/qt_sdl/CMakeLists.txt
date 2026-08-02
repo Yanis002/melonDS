@@ -46,8 +46,6 @@ set(SOURCES_QT_SDL
     MemViewDialog.cpp
     MemWatchDialog.cpp
     MemScanDialog.cpp
-    MemWatchActorDialog.cpp
-    MemWatchActor.cpp
     MemWatchExplorerDialog.h
     MemWatchExplorerDialog.cpp
 

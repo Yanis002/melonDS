@@ -25,6 +25,8 @@
 #include <QStyle>
 #include <QFileDialog>
 #include <string.h>
+// #include <QStyleFactory>
+// #include <QDebug>
 
 #include "main.h"
 
@@ -129,7 +131,12 @@ void CustomTextItem::mousePressEvent(QGraphicsSceneMouseEvent *event)
 
 void CustomTextItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event)
 {
-    this->SetEditionFlags();
+    MemViewDialog* dialog = (MemViewDialog*)this->scene()->parent();
+
+    if (dialog != nullptr && dialog->ByteGrouping == 1) {
+        this->SetEditionFlags();
+    }
+
     this->QGraphicsTextItem::mouseDoubleClickEvent(event);
 }
 
@@ -215,11 +222,14 @@ void CustomTextItem::keyPressEvent(QKeyEvent *event)
     }
     else
     {
+        MemViewDialog* dialog = (MemViewDialog*)this->scene()->parent();
         switch (key)
         {
             case Qt::Key_Enter:
             case Qt::Key_Return:
-                this->SetEditionFlags();
+                if (dialog != nullptr && dialog->ByteGrouping == 1) {
+                    this->SetEditionFlags();
+                }
                 break;
             case Qt::Key_Left:
                 emit switchFocus(focusDirection_Left, focusAction_SetSelectionMode);
@@ -234,6 +244,11 @@ void CustomTextItem::keyPressEvent(QKeyEvent *event)
                 emit switchFocus(focusDirection_Down, focusAction_SetSelectionMode);
                 break;
             default:
+                if (dialog != nullptr && dialog->ByteGrouping != 1) {
+                    // allows coping to clipboard
+                    this->QGraphicsTextItem::keyPressEvent(event);
+                }
+
                 event->ignore();
                 return;
         }
@@ -320,6 +335,9 @@ MemViewDialog::MemViewDialog(QWidget* parent) : QDialog(parent)
     this->setModal(false);
     this->setWindowTitle("Memory Viewer - melonDS");
     setAttribute(Qt::WA_DeleteOnClose);
+
+    // QStringList styles = QStyleFactory::keys();
+    // qDebug() << "Styles disponibles :" << styles;
 
     this->Highlight = false;
     this->ByteGrouping = 1;
@@ -441,10 +459,11 @@ MemViewDialog::MemViewDialog(QWidget* parent) : QDialog(parent)
     this->MemRegionBox->setObjectName("combobox_mem_region");
 
     this->ByteGroupingLabel->setText("Grouping:");
-    this->ByteGroupingLabel->setGeometry(7, 295, 60, 18);
+    this->ByteGroupingLabel->setGeometry(161, 299, 60, 18);
     this->ByteGroupingLabel->setObjectName("label_byte_grouping");
 
-    this->ByteGroupingBox->setGeometry(65, 288, 87, 32);
+    QRect geometry = this->ByteGroupingLabel->geometry();
+    this->ByteGroupingBox->setGeometry(geometry.x() + geometry.width() + 5, 294, 92, 32);
     this->ByteGroupingBox->addItem("Bytes");
     this->ByteGroupingBox->addItem("Halfwords");
     this->ByteGroupingBox->addItem("Words");
@@ -819,7 +838,7 @@ void MemViewDialog::UpdateText(int addrIndex, int index)
                     uint8_t byte2 = pRAM2 != nullptr ? *pRAM2 : 0x69;
                     uint16_t halfword = byte1 | (byte2 << 8);  // Little-endian
                     text.setNum(halfword, 16);
-                    item->SetWidth(40);  // Width for 4 hex chars
+                    item->SetWidth(35 + 1);  // Width for 4 hex chars
                     item->setPlainText(text.toUpper().rightJustified(4, '0'), this->Highlight);
                     item->setVisible(true);
                 }
@@ -845,7 +864,7 @@ void MemViewDialog::UpdateText(int addrIndex, int index)
                     uint8_t byte4 = pRAM4 != nullptr ? *pRAM4 : 0x69;
                     uint32_t word = byte1 | (byte2 << 8) | (byte3 << 16) | (byte4 << 24);  // Little-endian
                     text.setNum(word, 16);
-                    item->SetWidth(80);  // Width for 8 hex chars
+                    item->SetWidth(65 + 1);  // Width for 8 hex chars
                     item->setPlainText(text.toUpper().rightJustified(8, '0'), this->Highlight);
                     item->setVisible(true);
                 }
@@ -1308,6 +1327,11 @@ void MemViewDialog::onByteGroupingChanged(int index)
             break;
     }
 
+    QGraphicsItem* item = this->GfxScene->focusItem();
+    if (item != nullptr) {
+        item->clearFocus();
+    }
+
     this->UpdateHeaderOffsets();
     this->UpdateScene();
 }
@@ -1319,7 +1343,29 @@ void MemViewDialog::UpdateHeaderOffsets()
         QGraphicsTextItem* item = this->TopOffsetItems[i];
         if (item != nullptr)
         {
+            // column number * font size * text length
+            qreal x = i * item->font().pointSize() * 2;
+
+            // account for addresses column length + 10
+            x += item->font().pointSize() * 8 + 10;
+
             item->setVisible(i % this->ByteGrouping == 0);
+
+            switch (this->ByteGrouping) {
+                case 2:
+                    if (item->isVisible()) {
+                        item->setPos(x + 8, 0);
+                    }
+                    break;
+                case 4:
+                    if (item->isVisible()) {
+                        item->setPos(x + 23, 0);
+                    }
+                    break;
+                default:
+                    item->setPos(x, 0);
+                    break;
+            }
         }
     }
 }

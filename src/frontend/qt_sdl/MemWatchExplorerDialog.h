@@ -74,7 +74,8 @@ struct ActorData
     uint32_t flags;
     uint32_t actorId;
     QString actorIdString;
-    
+    unsigned short params[4];
+
     bool operator==(const ActorData& other) const
     {
         return address == other.address &&
@@ -121,9 +122,11 @@ struct MapObjectData
     uint32_t address;
     uint32_t tableEntryAddress;
     int32_t posX, posY, posZ;
-    uint32_t flags;
+    unsigned short flags;
     uint32_t mapObjectId;
     QString mapObjectIdString;
+    unsigned short params[4];
+    unsigned char initialPos[2];
     
     bool operator==(const MapObjectData& other) const
     {
